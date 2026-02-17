@@ -18,11 +18,11 @@ jobs:
       - name: Restore previous state
         uses: actions/cache@v4
         with:
-          path: last_state.txt
-          key: tcf-state
+          path: last_state.json
+          key: tcf-tef-state-v2
 
-      - name: Check TCF status
+      - name: Check TCF and TEF status
         run: python check_tcf.py
 
       - name: Show saved state
-        run: cat last_state.txt
+        run: cat last_state.json
