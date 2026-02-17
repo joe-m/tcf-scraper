@@ -23,3 +23,6 @@ jobs:
 
       - name: Check TCF status
         run: python check_tcf.py
+
+      - name: Show saved state
+        run: cat last_state.txt
