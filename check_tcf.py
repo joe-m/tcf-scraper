@@ -12,8 +12,12 @@ PAGES = {
     "TCF": "https://www.afvictoria.ca/exams/tcf/",
     "TEF": "https://www.afvictoria.ca/exams/tef/",
 }
-STATE_FILE = os.environ.get("STATE_FILE", "last_state.json")
 NTFY_TOPIC = "tcf-registration-alert"
+
+# Gist-based state storage (set env vars for Render; falls back to local file)
+GIST_ID = os.environ.get("GIST_ID")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+STATE_FILE = os.environ.get("STATE_FILE", "last_state.json")
 
 # Lines containing these substrings (lowercased) are filtered out
 NOISE = [
@@ -104,7 +108,22 @@ def extract_status(html):
     return parser.get_text()
 
 
+# --- State persistence (Gist or local file) ---
+
 def load_previous_state():
+    if GIST_ID and GITHUB_TOKEN:
+        return _load_state_gist()
+    return _load_state_file()
+
+
+def save_state(state):
+    if GIST_ID and GITHUB_TOKEN:
+        _save_state_gist(state)
+    else:
+        _save_state_file(state)
+
+
+def _load_state_file():
     try:
         with open(STATE_FILE) as f:
             return json.load(f)
@@ -112,10 +131,52 @@ def load_previous_state():
         return {}
 
 
-def save_state(state):
+def _save_state_file(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
+
+def _load_state_gist():
+    req = urllib.request.Request(
+        f"https://api.github.com/gists/{GIST_ID}",
+        headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            gist = json.loads(resp.read().decode())
+            content = gist["files"]["last_state.json"]["content"]
+            return json.loads(content)
+    except (KeyError, json.JSONDecodeError, urllib.error.HTTPError) as e:
+        print(f"  Could not load gist state: {e}")
+        return {}
+
+
+def _save_state_gist(state):
+    payload = json.dumps({
+        "files": {
+            "last_state.json": {
+                "content": json.dumps(state, indent=2)
+            }
+        }
+    }).encode()
+    req = urllib.request.Request(
+        f"https://api.github.com/gists/{GIST_ID}",
+        data=payload,
+        headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+        },
+        method="PATCH",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        print(f"  State saved to gist (HTTP {resp.status})")
+
+
+# --- Notification ---
 
 def notify(name, old, new):
     title = f"{name} Registration Status Changed"

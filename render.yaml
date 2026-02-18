@@ -1,0 +1,12 @@
+services:
+  - type: cron
+    name: tcf-tef-monitor
+    runtime: python
+    schedule: "*/5 15-23,0-1 * * 1-6"  # Every 5 min, 7am-5pm PST, weekdays
+    buildCommand: ""
+    startCommand: python check_tcf.py
+    envVars:
+      - key: GIST_ID
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
